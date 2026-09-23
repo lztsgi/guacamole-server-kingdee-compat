@@ -32,7 +32,7 @@ jobs:
           git remote add upstream https://github.com/apache/guacamole-server.git 2>/dev/null || true
           git fetch upstream --tags --force
 
-      - name: Merge the latest stable release
+      - name: Merge the latest stable release and update its version
         id: merge
         shell: bash
         run: |
@@ -52,6 +52,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git merge --no-edit "${latest_tag}"
+
+          printf '%s\n' "${latest_tag}" > .guacamole-version
+          git add .guacamole-version
+          if ! git diff --cached --quiet; then
+            git commit -m "Set Guacamole base version to ${latest_tag}"
+          fi
+
           after="$(git rev-parse HEAD)"
 
           if [ "${before}" = "${after}" ]; then
@@ -77,6 +84,9 @@ jobs:
 
           print("Kingdee clipboard compatibility patch verified.")
           PY
+
+          version="$(tr -d '[:space:]' < .guacamole-version)"
+          test "${version}" = "$(git tag --list | grep -E '^1\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
 
       - name: Push the synchronized branch
         if: steps.merge.outputs.changed == 'true'
