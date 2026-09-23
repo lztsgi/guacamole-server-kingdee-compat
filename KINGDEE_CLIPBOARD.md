@@ -30,11 +30,15 @@ CF_UNICODETEXT -> UTF-16
 GitHub Actions 从 `kingdee-compat` 分支构建并发布：
 
 ```text
-ghcr.io/lztsgi/guacd-kingdee-compat:kingdee-compat
+ghcr.io/lztsgi/guacd-custom-patch:1.6.0
 ```
 
-`kingdee-compat` 是随兼容分支更新的固定标签。每次构建还会发布
-`sha-xxxxxxx` 标签，便于固定或回退到特定提交。
+镜像版本号与其基于的 Apache Guacamole 正式版本严格对应。仓库中的
+`.guacamole-version` 保存当前基线；初始版本为 `1.6.0`。每次构建还会
+发布 `sha-xxxxxxx` 标签，便于固定或回退到特定提交。
+
+针对 1.6.0，构建工作流锁定 FreeRDP 及 guacd 的核心协议依赖版本，避免
+第三方仓库发布新标签后使旧版 Guacamole Dockerfile 的构建结果发生漂移。
 
 ## Compose 切换
 
@@ -43,7 +47,7 @@ ghcr.io/lztsgi/guacd-kingdee-compat:kingdee-compat
 
 ```yaml
   guacd:
-    image: ghcr.io/lztsgi/guacd-kingdee-compat:kingdee-compat
+    image: ghcr.io/lztsgi/guacd-custom-patch:${GUACAMOLE_VERSION}
     container_name: guacd
     hostname: guacd
     restart: unless-stopped
@@ -111,10 +115,12 @@ docker compose up -d --no-deps guacd
 
 ## 上游同步
 
-`.github/workflows/sync-upstream-stable.yml` 每周检查 Apache 官方仓库的
+`.github/workflows/sync-upstream-stable.yml` 每周二北京时间 02:17 检查 Apache 官方仓库的
 最新 1.x 正式版本标签（只接受 `1.x.y`，忽略 RC 和未发布的开发分支）。发现新正式版时，
-工作流会将其合并到 `kingdee-compat`，验证 Unicode-only 补丁仍然存在，然后直接
-推送到本分支并触发新的 Docker 镜像构建。它不会创建或提交任何上游 PR。
+工作流会将其合并到 `kingdee-compat`，验证 Unicode-only 补丁仍然存在，然后更新
+`.guacamole-version`、推送到本分支并触发同版本号的 Docker 镜像构建。
+例如官方发布 `1.6.1` 后，对应镜像为
+`ghcr.io/lztsgi/guacd-custom-patch:1.6.1`。它不会创建或提交任何上游 PR。
 
 如果官方修改了同一段剪贴板代码并产生冲突，工作流会失败并停止，不会强制覆盖。
 也可以在 GitHub 的 Actions 页面手动运行该工作流。
