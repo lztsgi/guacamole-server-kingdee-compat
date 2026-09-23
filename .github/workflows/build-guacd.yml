@@ -1,0 +1,61 @@
+name: Build Kingdee-compatible guacd image
+
+on:
+  push:
+    branches:
+      - kingdee-compat
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-guacd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the compatibility branch
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/guacd-kingdee-compat
+          tags: |
+            type=raw,value=kingdee-compat
+            type=sha,prefix=sha-
+          labels: |
+            org.opencontainers.image.title=Kingdee-compatible guacd
+            org.opencontainers.image.description=Apache Guacamole guacd with Unicode-only RDP clipboard advertisement for legacy Kingdee clients
+
+      - name: Build and publish linux/amd64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_ARCHITECTURE=X86
+            FREERDP_VERSION=2
+            WITH_FREERDP=2.11.7
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

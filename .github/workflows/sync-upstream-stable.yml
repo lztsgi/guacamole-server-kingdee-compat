@@ -1,0 +1,93 @@
+name: Sync latest stable Guacamole release
+
+on:
+  schedule:
+    # Every Tuesday at 02:17 Asia/Shanghai (Monday 18:17 UTC).
+    - cron: "17 18 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: sync-upstream-stable
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the compatibility branch
+        uses: actions/checkout@v4
+        with:
+          ref: kingdee-compat
+          fetch-depth: 0
+
+      - name: Fetch Apache upstream tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/apache/guacamole-server.git 2>/dev/null || true
+          git fetch upstream --tags --force
+
+      - name: Merge the latest stable release
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          latest_tag="$(
+            git tag --list \
+              | grep -E '^1\.[0-9]+\.[0-9]+$' \
+              | sort -V \
+              | tail -n 1
+          )"
+
+          test -n "${latest_tag}"
+          echo "Latest stable upstream tag: ${latest_tag}"
+
+          before="$(git rev-parse HEAD)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-edit "${latest_tag}"
+          after="$(git rev-parse HEAD)"
+
+          if [ "${before}" = "${after}" ]; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Verify the Kingdee clipboard compatibility patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path("src/protocols/rdp/channels/cliprdr.c").read_text()
+          start = source.index("static UINT guac_rdp_cliprdr_send_format_list")
+          end = source.index("static UINT guac_rdp_cliprdr_send_capabilities", start)
+          function = source[start:end]
+
+          assert "{ .formatId = CF_UNICODETEXT }" in function
+          assert "{ .formatId = CF_TEXT }" not in function
+          assert ".numFormats = 1" in function
+
+          print("Kingdee clipboard compatibility patch verified.")
+          PY
+
+      - name: Push the synchronized branch
+        if: steps.merge.outputs.changed == 'true'
+        shell: bash
+        run: git push origin HEAD:kingdee-compat
+
+      # Pushes made with GITHUB_TOKEN do not start other workflows. Explicitly
+      # dispatch the image build after a successful upstream synchronization.
+      - name: Build the synchronized image
+        if: steps.merge.outputs.changed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build-guacd.yml --ref kingdee-compat
