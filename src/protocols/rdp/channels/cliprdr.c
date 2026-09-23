@@ -80,7 +80,11 @@ static UINT guac_rdp_cliprdr_send_format_list(CliprdrClientContext* cliprdr) {
     guac_client* client = clipboard->client;
     guac_rdp_client* rdp_client = (guac_rdp_client*) client->data;
 
-    /* We support CP-1252 and UTF-16 text */
+    /*
+     * Advertise only Unicode text. Windows will synthesize CF_TEXT locally
+     * when a legacy application requests it, using the remote Windows ANSI
+     * code page instead of Guacamole's fixed CP-1252 conversion.
+     */
     CLIPRDR_FORMAT_LIST format_list = {
 #ifdef HAVE_CLIPRDR_HEADER
         .common = {
@@ -90,10 +94,9 @@ static UINT guac_rdp_cliprdr_send_format_list(CliprdrClientContext* cliprdr) {
         .msgType = CB_FORMAT_LIST,
 #endif
         .formats = (CLIPRDR_FORMAT[]) {
-            { .formatId = CF_TEXT },
             { .formatId = CF_UNICODETEXT }
         },
-        .numFormats = 2
+        .numFormats = 1
     };
 
     guac_client_log(client, GUAC_LOG_TRACE, "CLIPRDR: Sending format list");
