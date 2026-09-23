@@ -57,5 +57,9 @@ jobs:
             BUILD_ARCHITECTURE=X86
             FREERDP_VERSION=2
             WITH_FREERDP=2.11.7
+            WITH_LIBSSH2=libssh2-1.11.1
+            WITH_LIBTELNET=0.23
+            WITH_LIBVNCCLIENT=LibVNCServer-0.9.15
+            WITH_LIBWEBSOCKETS=v4.3.3
           cache-from: type=gha
           cache-to: type=gha,mode=max
